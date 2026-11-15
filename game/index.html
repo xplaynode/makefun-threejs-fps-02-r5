@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLAGLINE — a three.js tactical FPS</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#141210; font-family:"Segoe UI", Arial, sans-serif; color:#fff; }
+  #view { display:block; width:100vw; height:100vh; }
+  .hudLayer { position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #crosshair { position:absolute; left:50%; top:50%; width:0; height:0; --gap:8px; }
+  #crosshair span { position:absolute; background:#eaffea; box-shadow:0 0 3px #000; }
+  #crosshair .t { width:2px; height:9px; left:-1px; top:calc(-9px - var(--gap)); }
+  #crosshair .b { width:2px; height:9px; left:-1px; top:var(--gap); }
+  #crosshair .l { width:9px; height:2px; top:-1px; left:calc(-9px - var(--gap)); }
+  #crosshair .r { width:9px; height:2px; top:-1px; left:var(--gap); }
+  #hitmarker { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:22px; opacity:0; font-weight:700; }
+  #dmgDir { position:absolute; left:50%; top:50%; width:120px; height:120px; margin:0; opacity:0; transition:opacity .3s;
+    background:conic-gradient(from -18deg at 50% 50%, rgba(255,60,40,.85) 0deg, transparent 36deg, transparent 360deg); border-radius:50%; }
+  #bottomBar { position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:space-between; align-items:flex-end; padding:14px 22px; }
+  .statBox { background:rgba(10,10,12,.55); border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 14px; min-width:110px; }
+  .statLabel { font-size:10px; letter-spacing:2px; opacity:.65; }
+  .statValue { font-size:30px; font-weight:700; line-height:1.05; }
+  #weaponName { font-size:15px; font-weight:600; text-align:right; }
+  #ammo { font-size:30px; font-weight:700; text-align:right; }
+  #money { color:#ffd76a; font-size:20px; font-weight:700; }
+  #topBar { position:absolute; top:0; left:0; right:0; display:flex; flex-direction:column; align-items:center; padding-top:10px; }
+  #timer { font-size:30px; font-weight:800; text-shadow:0 2px 6px #000; }
+  #score { font-size:17px; font-weight:700; letter-spacing:1px; }
+  #phaseLine { font-size:12px; letter-spacing:2px; opacity:.85; margin-top:2px; }
+  #pipsRow { display:flex; gap:26px; margin-top:5px; }
+  .pip { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:4px; border:1px solid rgba(0,0,0,.5); }
+  .pip.ember { background:#ff8c4a; } .pip.warden { background:#57b6ff; }
+  .pip.dead { background:#3a3a3a; opacity:.5; }
+  #bombLine { margin-top:6px; font-size:15px; font-weight:800; letter-spacing:1px; color:#ffd76a; text-shadow:0 1px 4px #000; display:none; }
+  #bombLine.urgent { color:#ff4a3d; animation:blink .4s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.35; } }
+  #feed { position:absolute; top:14px; right:16px; text-align:right; font-size:13px; }
+  .feedRow { background:rgba(10,10,12,.5); padding:3px 9px; border-radius:5px; margin-bottom:4px; }
+  #leftPanel { position:absolute; top:14px; left:16px; width:170px; }
+  #minimap { display:block; border:1px solid rgba(255,255,255,.18); border-radius:6px; }
+  #radioLog { margin-top:8px; font-size:11.5px; line-height:1.45; }
+  .radioRow { background:rgba(10,10,12,.5); padding:3px 8px; border-radius:5px; margin-bottom:3px; color:#ffe9c9; }
+  .radioRow b { color:#ffd76a; }
+  #roundDots { margin-top:4px; min-height:9px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; }
+  .dot.ember { background:#ff8c4a; } .dot.warden { background:#57b6ff; }
+  #progressWrap { position:absolute; left:50%; bottom:24%; transform:translateX(-50%); width:300px; display:none; text-align:center; }
+  #progressLabel { font-size:13px; font-weight:800; letter-spacing:2px; color:#ffd76a; text-shadow:0 1px 4px #000; margin-bottom:5px; }
+  #progressTrack { height:9px; background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.3); border-radius:5px; overflow:hidden; }
+  #progressBar { height:100%; width:0%; background:#ffd76a; }
+  #banner { position:absolute; left:0; right:0; top:26%; text-align:center; opacity:0; transition:opacity .35s; }
+  .bannerMain { font-size:46px; font-weight:900; letter-spacing:3px; text-shadow:0 3px 14px #000; }
+  .bannerSub { font-size:16px; opacity:.9; text-shadow:0 2px 8px #000; }
+  #prompt { position:absolute; left:0; right:0; bottom:19%; text-align:center; font-size:16px; font-weight:600; color:#ffd76a; text-shadow:0 1px 5px #000; display:none; }
+  #buyMenu { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:520px; max-width:92vw; background:rgba(12,13,16,.93);
+    border:1px solid #555; border-radius:12px; padding:16px 18px; z-index:20; display:none; pointer-events:auto; }
+  #buyHead { font-size:13.5px; font-weight:700; margin-bottom:12px; line-height:1.5; color:#ffd76a; }
+  .buyItem { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:#1d2026; color:#fff; border:1px solid #3a3f47;
+    border-radius:8px; padding:9px 12px; margin-bottom:7px; font-size:15px; cursor:pointer; }
+  .buyItem:hover:not(:disabled) { background:#2a2f38; }
+  .buyItem:disabled { opacity:.42; cursor:default; }
+  .buyKey { background:#000; border:1px solid #666; border-radius:4px; padding:1px 7px; font-weight:800; }
+  .buyPrice { margin-left:auto; color:#ffd76a; font-weight:700; }
+  .owned { color:#8be08b; font-size:11px; letter-spacing:1px; }
+  #scopeOverlay { position:fixed; inset:0; display:none; z-index:6; pointer-events:none;
+    background:radial-gradient(circle at 50% 50%, transparent 0 27%, rgba(0,0,0,.97) 29%); }
+  #flashOverlay { position:fixed; inset:0; background:#fff; opacity:0; z-index:8; pointer-events:none; transition:opacity .25s; }
+  #hurtVignette { position:fixed; inset:0; opacity:0; z-index:7; pointer-events:none; transition:opacity .18s;
+    background:radial-gradient(circle at 50% 50%, transparent 55%, rgba(200,20,10,.55) 100%); }
+  #startOverlay { position:fixed; inset:0; background:rgba(8,8,10,.78); z-index:30; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; cursor:pointer; }
+  #startOverlay h1 { font-size:56px; letter-spacing:6px; margin:0 0 4px; color:#ff8c4a; }
+  #startOverlay p { max-width:560px; line-height:1.55; font-size:15px; opacity:.92; }
+  #startOverlay .go { margin-top:14px; font-size:19px; font-weight:800; color:#ffd76a; }
+  #matchEnd { display:none; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="hudLayer">
+  <div id="topBar">
+    <div id="timer">0:00</div>
+    <div id="score">0 — 0</div>
+    <div id="phaseLine"></div>
+    <div id="pipsRow"><span id="pipsEmber"></span><span id="pipsWarden"></span></div>
+    <div id="roundDots"></div>
+    <div id="bombLine"></div>
+  </div>
+  <div id="leftPanel"><canvas id="minimap" width="152" height="112"></canvas><div id="radioLog"></div></div>
+  <div id="progressWrap"><div id="progressLabel"></div><div id="progressTrack"><div id="progressBar"></div></div></div>
+  <div id="feed"></div>
+  <div id="crosshair"><span class="t"></span><span class="b"></span><span class="l"></span><span class="r"></span></div>
+  <div id="hitmarker">✕</div>
+  <div id="dmgDir"></div>
+  <div id="banner"></div>
+  <div id="prompt"></div>
+  <div id="bottomBar">
+    <div class="statBox"><div class="statLabel">HEALTH</div><div class="statValue" id="hp">100</div><div id="money">$800</div></div>
+    <div class="statBox"><div id="weaponName">P9 Sidearm</div><div id="ammo">12 / 96</div><div class="statLabel" style="text-align:right">AMMO</div></div>
+  </div>
+</div>
+
+<div id="buyMenu"><div id="buyHead"></div><div id="buyItems"></div>
+  <div style="font-size:12px;opacity:.7;margin-top:4px">Click an item or press its number key. B closes the shop. The round goes live when the buy timer ends.</div>
+</div>
+<div id="scopeOverlay"></div>
+<div id="flashOverlay"></div>
+<div id="hurtVignette"></div>
+<div id="matchEnd"></div>
+
+<div id="startOverlay">
+  <h1>SLAGLINE</h1>
+  <p>A round-based tactical FPS in a working foundry. You fight for <b style="color:#ff8c4a">Ember</b>:
+     plant the charge on site <b>A</b> or <b>B</b>, or wipe the <b style="color:#57b6ff">Wardens</b> out.
+     Win rounds to earn money, buy rifles, armor and grenades, and take the match at 9 rounds.</p>
+  <p>WASD move · mouse aim · click fire · R reload · Ctrl crouch · Shift walk (silent) · Space jump · right-click Longshot scope ·
+     3/4/5 throw flash/frag/smoke · E plant (hold) · G drop your primary for a teammate · B buy menu during the buy phase.
+     Your team plays a called plan each round — watch the radio log and the minimap. Stopping to shoot is far
+     more accurate than firing on the move — learn each gun's recoil pattern.</p>
+  <div class="go">CLICK TO PLAY</div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
